@@ -1,0 +1,101 @@
+id,title,description,severity,component,status,created_at,customer_impact
+1,App crashes on login,App crashes when user enters credentials and taps login,High,Auth,Open,2026-03-01,Users unable to access account
+2,Slow checkout process,Checkout takes more than 15 seconds to complete,Medium,Payments,Open,2026-03-02,Drop in conversion rate
+3,Incorrect order total,Order total not including tax correctly,High,Cart,Open,2026-03-02,Financial discrepancies
+4,UI glitch on profile page,Profile picture overlaps with text on iPhone 14,Low,UI,Open,2026-03-03,Minor UX issue
+5,Search returns irrelevant results,Search results not matching query terms,Medium,Search,Open,2026-03-03,User frustration
+6,App crash on login,Crash occurs intermittently when logging in with Google,High,Auth,Open,2026-03-04,Login failures
+7,Payment declined incorrectly,Valid credit cards are being rejected,High,Payments,Open,2026-03-04,Lost revenue
+8,Notifications not received,Push notifications not delivered on Android devices,Medium,Notifications,Open,2026-03-05,Reduced engagement
+9,Cart items disappear,Items removed from cart after refresh,High,Cart,Open,2026-03-05,Lost purchases
+10,Slow app startup,App takes 10+ seconds to load initial screen,Medium,Performance,Open,2026-03-06,User churn risk
+11,Search crashes app,App crashes when searching long queries,High,Search,Open,2026-03-06,Feature unusable
+12,Profile update not saved,Changes to profile not persisting after save,Medium,Profile,Open,2026-03-07,User frustration
+13,Duplicate notifications,Users receive same notification multiple times,Low,Notifications,Open,2026-03-07,Annoyance
+14,Checkout button unresponsive,Button does not respond on first tap,High,Payments,Open,2026-03-08,Checkout failure
+15,Image upload fails,Users unable to upload profile pictures,Medium,Profile,Open,2026-03-08,Incomplete profiles
+16,App freezes on home screen,App becomes unresponsive after opening,High,Performance,Open,2026-03-09,Users blocked
+17,Search results delayed,Search results take too long to appear,Medium,Search,Open,2026-03-09,Poor UX
+18,Cart total incorrect,Discounts not applied correctly,High,Cart,Open,2026-03-10,Revenue impact
+19,Login session expires too soon,Users logged out after short inactivity,Medium,Auth,Open,2026-03-10,User annoyance
+20,Notifications delayed,Push notifications delivered hours late,Low,Notifications,Open,2026-03-11,Reduced engagement
+21,Password reset email not sent,Users do not receive password reset emails after requesting them,High,Auth,Open,2026-03-11,Users locked out of accounts
+22,Apple Pay integration broken,Apple Pay fails silently at payment confirmation step,High,Payments,Open,2026-03-12,Lost revenue on iOS
+23,Wishlist not persisting,Items added to wishlist disappear after app restart,Medium,Cart,Open,2026-03-12,User frustration
+24,Dark mode text unreadable,Text contrast insufficient in dark mode on settings screen,Medium,UI,Open,2026-03-13,Accessibility issue
+25,Search filters not applying,Selecting price or category filter has no effect on results,High,Search,Open,2026-03-13,Users cannot narrow results
+26,Biometric login fails on Android,Fingerprint authentication rejected even when registered,High,Auth,Open,2026-03-14,Users forced to use password fallback
+27,Refund not processed,Refund requests submitted but no confirmation and no credit issued,High,Payments,Open,2026-03-14,Financial loss for users
+28,Promo code not applied,Valid promo codes rejected at checkout with no error message,Medium,Cart,Open,2026-03-15,Revenue and trust impact
+29,Onboarding screens skip randomly,Tapping next skips multiple onboarding screens on iPad,Low,UI,Open,2026-03-15,Incomplete onboarding
+30,Search autocomplete crashes,Autocomplete suggestions cause app crash on slow connections,High,Search,Open,2026-03-16,Feature unusable on poor networks
+31,Notification tap does not navigate,Tapping a push notification opens app but does not navigate to relevant content,Medium,Notifications,Open,2026-03-16,Reduced engagement
+32,Profile bio not rendering markdown,Markdown formatting in bio displays raw syntax instead of rendered text,Low,Profile,Open,2026-03-17,Minor UX issue
+33,Memory leak on home screen,App memory usage grows unbounded after leaving home screen open for 10 minutes,High,Performance,Open,2026-03-17,App crash after extended use
+34,OAuth token not refreshing,Users silently logged out when OAuth token expires without refresh attempt,High,Auth,Open,2026-03-18,Unexpected session termination
+35,Duplicate charges on retry,Retrying a failed payment results in duplicate charge on user card,High,Payments,Open,2026-03-18,Financial harm to users
+36,Cart quantity not updating,Incrementing item quantity in cart shows old value until page reload,Medium,Cart,Open,2026-03-19,Confusing UX
+37,Button labels truncated on small screens,CTA button text cut off on iPhone SE and similar small devices,Low,UI,Open,2026-03-19,Reduced clarity
+38,Search not returning recent items,Items listed within last 24 hours do not appear in search results,High,Search,Open,2026-03-20,Sellers losing visibility
+39,Email notification opt-out ignored,Users who unsubscribed from emails continue to receive marketing messages,High,Notifications,Open,2026-03-20,Legal compliance risk
+40,Profile photo cropping broken,Cropping tool does not save changes and reverts to original image,Medium,Profile,Open,2026-03-21,Incomplete profiles
+41,Slow image loading on product pages,Product images take 8+ seconds to load on LTE connections,Medium,Performance,Open,2026-03-21,User drop-off on product pages
+42,SSO login loop,Users authenticating via SSO redirected in infinite loop and never land on home screen,High,Auth,Open,2026-03-22,Users completely blocked
+43,Payment method not saved,Selecting save card during checkout does not persist for future orders,Medium,Payments,Open,2026-03-22,Friction on repeat purchases
+44,Remove from cart fails silently,Tapping remove on cart item shows no confirmation and item remains,Medium,Cart,Open,2026-03-23,User confusion
+45,Tooltip overlaps content on scroll,Tooltips remain fixed on screen while user scrolls causing content overlap,Low,UI,Open,2026-03-23,Minor UX issue
+46,Search ranking inconsistent,Same query returns different result ordering on consecutive searches,Medium,Search,Open,2026-03-24,Unpredictable user experience
+47,Notification badge count incorrect,App icon badge shows wrong unread count after clearing notifications,Low,Notifications,Open,2026-03-24,Minor UX issue
+48,Profile link sharing broken,Sharing profile URL generates link that returns 404,High,Profile,Open,2026-03-25,Users cannot share profiles
+49,ANR on low-end Android devices,App Not Responding dialog triggered on devices with less than 3GB RAM during search,High,Performance,Open,2026-03-25,App unusable on budget devices
+50,Two-factor authentication code not accepted,Valid TOTP codes rejected intermittently during login,High,Auth,Open,2026-03-26,Users locked out intermittently
+51,Currency conversion incorrect,Prices shown in local currency use outdated exchange rates,Medium,Payments,Open,2026-03-26,User mistrust and potential disputes
+52,Cart merge fails after login,Guest cart items not merged with account cart after user logs in,Medium,Cart,Open,2026-03-27,Lost items on login
+53,Splash screen flicker on launch,White flash visible before splash screen appears on Android,Low,UI,Open,2026-03-27,Minor visual artifact
+54,Search results show out-of-stock items,Items with zero inventory appearing in search results without indication,High,Search,Open,2026-03-28,User frustration and wasted clicks
+55,In-app notification center empty,Notification history panel shows blank list despite user having received notifications,Medium,Notifications,Open,2026-03-28,Users cannot review past alerts
+56,Username change not reflected globally,After updating username profile shows new name but comments still show old username,Medium,Profile,Open,2026-03-29,Inconsistent identity display
+57,Excessive battery drain,App consumes 15% battery per hour in background due to location polling,High,Performance,Open,2026-03-29,User complaints and uninstalls
+58,Magic link login expired too quickly,Magic link emails expire after 2 minutes instead of documented 15 minutes,High,Auth,Open,2026-03-30,Users unable to complete login
+59,Partial payment not handled,When partial payment fails app shows success screen instead of error,High,Payments,Open,2026-03-30,Users believe order placed when it is not
+60,Cart persists after order completion,Items remain in cart after successful order instead of being cleared,Low,Cart,Open,2026-03-31,User confusion on repeat visits
+61,Modal dialogs not dismissible on Android,Tapping outside modal or pressing back button does not close dialog,Medium,UI,Open,2026-03-31,Users stuck in flow
+62,Search does not support special characters,Queries with accented characters or symbols return zero results,Medium,Search,Open,2026-04-01,International users underserved
+63,Notification sound plays on mute,Push notification sound plays even when device is on silent,Medium,Notifications,Open,2026-04-01,User complaints
+64,Profile followers count incorrect,Follower count displays stale number until manual refresh,Low,Profile,Open,2026-04-02,Minor inaccuracy
+65,App slow to resume from background,Resuming app from background takes 5+ seconds to become interactive,Medium,Performance,Open,2026-04-02,Perceived poor performance
+66,Account lockout after one failed attempt,Account locked after single wrong password instead of documented five attempts,High,Auth,Open,2026-04-03,Excessive user lockouts
+67,Invoice PDF not generating,Order confirmation page shows error when user tries to download invoice PDF,Medium,Payments,Open,2026-04-03,Users cannot get receipts
+68,Cart price not updating on sale,When item goes on sale cart still shows original price until removed and re-added,High,Cart,Open,2026-04-04,Users overcharged at checkout
+69,Landscape mode layout broken,Switching to landscape orientation breaks navigation bar layout,Low,UI,Open,2026-04-04,Minor UX issue on tablets
+70,Search history not clearing,Tapping clear search history has no effect and history persists,Low,Search,Open,2026-04-05,Minor privacy concern
+71,Silent notification failure on iOS 17,Push notifications silently dropped on devices running iOS 17.4 and above,High,Notifications,Open,2026-04-05,Critical engagement loss on latest iOS
+72,Profile activity feed not paginating,Activity feed loads first 20 items then shows no load more option,Medium,Profile,Open,2026-04-06,Users cannot see full history
+73,Crash on large image upload,Uploading images over 8MB crashes the app without error message,High,Performance,Open,2026-04-06,Data loss risk
+74,Session not invalidated on password change,Existing sessions remain active after user changes password,High,Auth,Open,2026-04-07,Security vulnerability
+75,Payment gateway timeout not handled,When payment gateway times out app displays blank screen instead of retry option,High,Payments,Open,2026-04-07,Users abandon checkout
+76,Cart not syncing across devices,Items added on mobile do not appear in web cart and vice versa,Medium,Cart,Open,2026-04-08,Fragmented experience across platforms
+77,Font size ignores accessibility settings,App does not respect system large text setting on iOS,Medium,UI,Open,2026-04-08,Accessibility failure
+78,Search ranking ignores user preferences,Personalized search ranking not applied despite user setting preferences,Medium,Search,Open,2026-04-09,Reduced relevance of results
+79,Notification preferences reset on update,User notification settings reset to default after app update,High,Notifications,Open,2026-04-09,Unwanted notifications after update
+80,Profile private mode not enforced,Profile set to private still visible to unauthenticated users via direct URL,High,Profile,Open,2026-04-10,Privacy violation
+81,High CPU usage during video playback,CPU spikes to 100% when playing product demo videos causing device heat,High,Performance,Open,2026-04-10,Device overheating and throttling
+82,Login redirect after timeout goes to wrong page,After session timeout login redirect sends user to home instead of original destination,Medium,Auth,Open,2026-04-11,User loses navigation context
+83,Split payment not supported,App shows split payment option but selecting it throws unhandled exception,High,Payments,Open,2026-04-11,Feature completely broken
+84,Cart item limit not communicated,Cart silently stops adding items after 50 without notifying user,Medium,Cart,Open,2026-04-12,User confusion on large orders
+85,Dropdown menus cut off on small screens,Select dropdowns extend beyond screen boundary on devices under 375px width,Low,UI,Open,2026-04-12,Unusable on small devices
+86,Search indexing delay,Newly listed items take up to 2 hours to appear in search results,Medium,Search,Open,2026-04-13,Sellers lose early visibility
+87,Marketing emails sent after deletion,Users who deleted accounts still receive marketing emails,High,Notifications,Open,2026-04-13,Legal and compliance risk
+88,Profile verification badge missing after restore,Verified badge disappears after user restores account from deletion request,Medium,Profile,Open,2026-04-14,Trust and credibility impact
+89,Slow database queries on order history,Order history page takes 12+ seconds to load for users with more than 500 orders,High,Performance,Open,2026-04-14,High-value users most impacted
+90,Account deletion not completing,Account deletion request confirmed via email but account still accessible after 48 hours,High,Auth,Open,2026-04-15,GDPR compliance risk
+91,Payment summary missing line items,Order confirmation shows total but does not itemize individual charges,Medium,Payments,Open,2026-04-15,Reduced transparency
+92,Bulk remove from cart broken,Select all and remove functionality removes only first item in cart,Medium,Cart,Open,2026-04-16,Poor experience for users with large carts
+93,Animation janky on mid-range Android,Page transition animations drop below 30fps on mid-range Android devices,Low,UI,Open,2026-04-16,Perceived poor quality
+94,Search synonym support missing,Searching for synonyms of product names returns zero results,Medium,Search,Open,2026-04-17,Users miss relevant results
+95,Notification delivery rate drop,Push notification delivery rate dropped from 95% to 72% after recent backend deploy,High,Notifications,Open,2026-04-17,Significant engagement loss
+96,Profile timezone not applied to timestamps,Post timestamps shown in UTC instead of user profile timezone,Low,Profile,Open,2026-04-18,Confusing timestamps for international users
+97,Background sync drains data,App background sync consumes 200MB+ of mobile data per day,High,Performance,Open,2026-04-18,User complaints on limited data plans
+98,Concurrent login not detected,User logged in on two devices simultaneously with no alert or session management,Medium,Auth,Open,2026-04-19,Security and account sharing concern
+99,Gift card balance not applied,Gift card code accepted but balance not deducted from order total,High,Payments,Open,2026-04-19,Financial discrepancy
+100,Cart abandonment email sends wrong items,Cart abandonment reminder email lists incorrect items from a different user session,High,Cart,Open,2026-04-20,Privacy violation and user confusion
