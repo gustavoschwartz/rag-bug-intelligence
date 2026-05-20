@@ -148,13 +148,14 @@ def tokenize(text: str) -> list[str]:
 def build_tfidf_index(df: pd.DataFrame) -> list[dict]:
     """
     Build a TF-IDF vector for each bug.
+    TF-IDF = Term Frequency - Inverse Document Frequency. Document = bug for this project.
 
     We concatenate all text fields so the retrieval is multi-field:
     title + description + component + severity + customer_impact
 
     Returns a list of dicts, one per bug: {term: tfidf_score}
     """
-    # Step 1: Tokenize each bug's full text
+    # Step 1: Tokenize each document's full text
     doc_tokens = []
     for _, row in df.iterrows():
         text = f"{row['title']} {row['description']} {row['component']} {row['severity']} {row['customer_impact']}"
@@ -544,91 +545,95 @@ with col_context:
 
 # ─────────────────────────────────────────────
 # 12. RAG PIPELINE EXECUTION
-#     Triggered when user submits a query.
-#     Runs through all 5 pipeline steps in order.
+#
+#     Streamlit reruns the entire script on every interaction.
+#     The key insight: do everything in ONE block, no st.rerun()
+#     mid-pipeline. st.rerun() caused the original bugs:
+#       - double submission (form + suggested button both fired)
+#       - pipeline never completing (pending_query set after rerun)
+#
+#     Instead: run all 5 steps synchronously, update session_state
+#     at the end, then let Streamlit's natural rerun refresh the UI.
 # ─────────────────────────────────────────────
 
-if submitted and user_input.strip():
+# Resolve the final query: suggested button takes priority over form,
+# but only one should ever trigger per rerun.
+final_query = suggested_query if suggested_query else (user_input if submitted else None)
+
+if final_query and final_query.strip():
 
     if not api_key:
         st.error("Add your Anthropic API key in the sidebar to continue.")
         st.stop()
 
-    # Load data and build index (cached after first run)
     try:
         df = load_bugs()
     except FileNotFoundError:
         st.error("bugs_extended.csv not found. Make sure it's in the same directory as app.py.")
         st.stop()
 
-    tfidf_index = build_tfidf_index(df)   # cached implicitly via @st.cache_data on load_bugs
+    query = final_query.strip()
 
-    # Add user message to history
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
-
-    # ── Step 1: Encode query ───────────────────
-    st.session_state.pipeline_step = "encode query"
-    st.rerun()
-
-# Pipeline continuation after rerun — check if we're mid-pipeline
-# We track this via a pending query in session_state
-if "pending_query" not in st.session_state:
-    st.session_state.pending_query = None
-
-if submitted and user_input.strip() and api_key:
-    st.session_state.pending_query = {
-        "query": user_input,
-        "mode": mode,
-        "top_k": top_k,
-    }
-
-if st.session_state.pending_query and st.session_state.pipeline_step == "encode query":
-    pending = st.session_state.pending_query
-    query   = pending["query"]
-    k       = pending["top_k"]
-    m       = pending["mode"]
+    # Add user message to history immediately so it renders on next rerun
+    st.session_state.chat_history.append({"role": "user", "content": query})
 
     try:
-        df         = load_bugs()
-        tfidf_idx  = build_tfidf_index(df)
+        # ── Step 1: Encode query ───────────────────
+        st.session_state.pipeline_step = "encode query"
+        tfidf_idx = build_tfidf_index(df)
 
-        # ── Step 2: Retrieve ───────────────────
+        # ── Step 2 & 3: Retrieve + rank ────────────
         st.session_state.pipeline_step = "cosine retrieval"
-        results = retrieve(query, df, tfidf_idx, top_k=k)
-
-        # ── Step 3: Rank & filter ──────────────
+        results = retrieve(query, df, tfidf_idx, top_k=top_k)
         st.session_state.pipeline_step = "rank & filter"
         st.session_state.last_retrieved = results
 
-        # ── Step 4: Augment prompt ─────────────
+        # Update retrieval panel immediately so user sees it while waiting
+        with col_context:
+            for r in results:
+                bug = r["bug"]
+                score = r["score"]
+                score_pct = f"{score * 100:.1f}%"
+                sev_color = severity_color(bug["severity"])
+                score_css = score_color(score)
+                st.markdown(f"""
+<div class="bug-card">
+  <div class="bug-id">BUG-{bug['id']} &nbsp;
+    <span class="{score_css}" style="float:right; font-weight:500">{score_pct}</span>
+  </div>
+  <div class="bug-title">{bug['title']}</div>
+  <span style="font-size:10px; color:{sev_color}; border:1px solid {sev_color}33;
+    border-radius:3px; padding:1px 5px;">{bug['severity']}</span>
+  <span style="font-size:10px; color:#7a7870; border:1px solid #2a2a2e;
+    border-radius:3px; padding:1px 5px; margin-left:4px;">{bug['component']}</span>
+</div>
+""", unsafe_allow_html=True)
+
+        # ── Step 4: Augment prompt ─────────────────
         st.session_state.pipeline_step = "augment prompt"
         context_block = build_context_block(results)
-        system_prompt = MODE_PROMPTS[m](context_block, query)
+        system_prompt = MODE_PROMPTS[mode](context_block, query)
 
-        # ── Step 5: Generate ───────────────────
+        # ── Step 5: Stream generation ──────────────
         st.session_state.pipeline_step = "llm generate"
-
         response_text = ""
-        # Stream directly into the chat panel
-        with col_chat:
-            with st.spinner("Generating..."):
-                response_placeholder = st.empty()
-                for chunk in call_claude_streaming(system_prompt, query, api_key):
-                    response_text += chunk
-                    response_placeholder.markdown(
-                        f'<div class="assistant-msg"><div class="msg-label">rag//claude</div>{response_text}▌</div>',
-                        unsafe_allow_html=True,
-                    )
 
-        # Finalize: remove cursor, store in history
+        with col_chat:
+            response_placeholder = st.empty()
+            for chunk in call_claude_streaming(system_prompt, query, api_key):
+                response_text += chunk
+                response_placeholder.markdown(
+                    f'<div class="assistant-msg"><div class="msg-label">rag//claude</div>{response_text}▌</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # Store completed response and rerun once to clean up the cursor
         st.session_state.chat_history.append({"role": "assistant", "content": response_text})
-        st.session_state.pending_query = None
-        st.session_state.pipeline_step = "llm generate"  # leave as done
         st.rerun()
 
     except anthropic.AuthenticationError:
         st.error("Invalid API key. Check your Anthropic API key in the sidebar.")
-        st.session_state.pending_query = None
+        st.session_state.chat_history.pop()   # remove the user message we just added
     except Exception as e:
         st.error(f"Error: {e}")
-        st.session_state.pending_query = None
+        st.session_state.chat_history.pop()
