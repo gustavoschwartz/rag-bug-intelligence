@@ -352,7 +352,7 @@ def call_claude_streaming(system_prompt: str, user_query: str, api_key: str):
     client = anthropic.Anthropic(api_key=api_key)
 
     with client.messages.stream(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-5",
         max_tokens=1000,
         system=system_prompt,
         messages=[{"role": "user", "content": user_query}],
