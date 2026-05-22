@@ -4,20 +4,20 @@ RAG Bug Intelligence Dashboard
 Project 2 — Retrieval-Augmented Generation over bug report data
 Author: Gustavo Varejao
 
-Architecture:
-  CSV data → TF-IDF vectorization → cosine similarity retrieval
-           → prompt augmentation → Claude API → Streamlit UI
+Pipeline:
+  CSV → TF-IDF index → cosine similarity retrieval
+      → prompt augmentation → Claude API → Streamlit UI
 
-Key learning areas:
-  - How RAG retrieval works (TF-IDF + cosine similarity)
-  - How to augment an LLM prompt with retrieved context
-  - How mode-specific system prompts shape LLM behavior
-  - How caching reduces latency and API cost
+Why this architecture:
+  - TF-IDF + cosine similarity instead of an embeddings API: cheaper, faster,
+    fully transparent. Good trade-off at this corpus size (100 bugs).
+  - Workflow (not agents): each step is deterministic and inspectable.
+    Easier to debug, easier to explain in an interview.
+  - Mode-specific system prompts: same retrieval, different generation behavior.
+    Shows that RAG separates *what you fetch* from *how you reason over it*.
 """
 
-import os
 import math
-import time
 import re
 from collections import Counter
 
@@ -44,21 +44,16 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-/* Import monospace font for terminal feel */
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
 
-/* Global overrides */
 html, body, [class*="css"] { font-family: 'JetBrains Mono', monospace; }
 
-/* Sidebar */
 [data-testid="stSidebar"] { background-color: #0e0e0f; border-right: 1px solid #1e1e21; }
 [data-testid="stSidebar"] * { color: #e8e6e0 !important; }
 
-/* Main area */
 .stApp { background-color: #161618; }
 h1, h2, h3 { color: #EF9F27 !important; font-family: 'JetBrains Mono', monospace; }
 
-/* Metric cards */
 [data-testid="stMetric"] {
     background: #1e1e21; border: 1px solid #2a2a2e;
     border-radius: 8px; padding: 12px;
@@ -66,20 +61,18 @@ h1, h2, h3 { color: #EF9F27 !important; font-family: 'JetBrains Mono', monospace
 [data-testid="stMetricLabel"] > div { color: #7a7870 !important; font-size: 11px; }
 [data-testid="stMetricValue"] > div { color: #EF9F27 !important; font-size: 22px; }
 
-/* Retrieved bug cards */
 .bug-card {
     background: #1e1e21; border: 1px solid #2a2a2e;
     border-radius: 8px; padding: 12px; margin-bottom: 8px;
     font-size: 12px;
 }
 .bug-card:hover { border-color: rgba(239,159,39,0.4); }
-.bug-id   { color: #5a5855; font-size: 10px; }
+.bug-id    { color: #5a5855; font-size: 10px; }
 .bug-title { color: #e8e6e0; font-weight: 500; margin: 4px 0; }
 .score-high { color: #97C459; }
 .score-med  { color: #EF9F27; }
 .score-low  { color: #F09595; }
 
-/* Pipeline step badges */
 .step { display: inline-block; padding: 2px 8px; border-radius: 4px;
         font-size: 10px; margin: 2px; border: 1px solid #2a2a2e; color: #7a7870; }
 .step-active { border-color: rgba(239,159,39,0.5); color: #EF9F27;
@@ -87,7 +80,6 @@ h1, h2, h3 { color: #EF9F27 !important; font-family: 'JetBrains Mono', monospace
 .step-done   { border-color: rgba(99,153,34,0.4); color: #97C459;
                background: rgba(99,153,34,0.08); }
 
-/* Chat messages */
 .user-msg {
     background: rgba(239,159,39,0.1); border: 1px solid rgba(239,159,39,0.25);
     border-radius: 8px; padding: 10px 14px; margin: 8px 0;
@@ -105,29 +97,36 @@ h1, h2, h3 { color: #EF9F27 !important; font-family: 'JetBrains Mono', monospace
 
 # ─────────────────────────────────────────────
 # 3. DATA LOADING
-#    We cache this so it only runs once per session.
-#    st.cache_data is Streamlit's built-in caching decorator.
+#
+#    @st.cache_data means Streamlit runs this once and caches
+#    the result. Every rerun after the first uses the cached
+#    DataFrame instead of hitting disk again.
 # ─────────────────────────────────────────────
 
 @st.cache_data
 def load_bugs(path: str = "bugs_extended.csv") -> pd.DataFrame:
-    """Load bug data from CSV. Returns a DataFrame."""
-    df = pd.read_csv(path)
-    return df
+    return pd.read_csv(path)
 
 
 # ─────────────────────────────────────────────
 # 4. TF-IDF VECTORIZER
 #
-#    TF-IDF (Term Frequency-Inverse Document Frequency) converts
-#    text into numeric vectors that capture word importance:
+#    TF-IDF turns each bug's text into a numeric vector.
+#    The key idea: common words across all bugs (like "error")
+#    get low weight; distinctive words (like "OAuth", "refund")
+#    get high weight. This makes retrieval meaningful.
 #
-#    TF  = how often a word appears in THIS document
-#    IDF = log(total docs / docs containing this word)
-#          → rare words across corpus get higher weight
+#    TF  = how often a word appears in this bug (normalized)
+#    IDF = log(total bugs / bugs containing this word)
+#    TF-IDF = TF * IDF → a sparse dict {word: score} per bug
 #
-#    TF-IDF(word, doc) = TF * IDF
-#    Result: each bug becomes a sparse dictionary {word: score}
+#    Why not use an embeddings API?
+#    At 100 bugs, TF-IDF is fast, free, and fully transparent.
+#    The trade-off: it matches keywords, not meaning. Searching
+#    "login failure" won't match a bug that says "auth crash"
+#    unless those exact words appear. Embeddings handle that —
+#    but they cost money and add a network call. For a portfolio
+#    project, TF-IDF is the right call and a better teaching tool.
 # ─────────────────────────────────────────────
 
 STOPWORDS = {
@@ -139,44 +138,40 @@ STOPWORDS = {
 }
 
 def tokenize(text: str) -> list[str]:
-    """Lowercase, strip punctuation, split on whitespace, remove stopwords."""
+    """Lowercase, strip punctuation, remove stopwords and short tokens."""
     text = text.lower()
     text = re.sub(r"[^a-z0-9\s]", " ", text)
-    tokens = [t for t in text.split() if len(t) > 2 and t not in STOPWORDS]
-    return tokens
+    return [t for t in text.split() if len(t) > 2 and t not in STOPWORDS]
+
 
 def build_tfidf_index(df: pd.DataFrame) -> list[dict]:
     """
-    Build a TF-IDF vector for each bug.
-    TF-IDF = Term Frequency - Inverse Document Frequency. Document = bug for this project.
-
-    We concatenate all text fields so the retrieval is multi-field:
-    title + description + component + severity + customer_impact
-
-    Returns a list of dicts, one per bug: {term: tfidf_score}
+    Build one TF-IDF vector per bug. We concatenate all text fields
+    so a query like "payment crash" can match on title, description,
+    component, severity, or customer impact — whichever is most relevant.
     """
-    # Step 1: Tokenize each document's full text
+    # Tokenize every bug's full text
     doc_tokens = []
     for _, row in df.iterrows():
         text = f"{row['title']} {row['description']} {row['component']} {row['severity']} {row['customer_impact']}"
         doc_tokens.append(tokenize(text))
 
-    N = len(doc_tokens)  # total number of documents
+    N = len(doc_tokens)
 
-    # Step 2: Compute document frequency (df) — how many docs contain each term
+    # Count how many bugs contain each term (document frequency)
     doc_freq: dict[str, int] = {}
     for tokens in doc_tokens:
-        for term in set(tokens):               # set() deduplicates within a doc
+        for term in set(tokens):          # set() so we count each term once per bug
             doc_freq[term] = doc_freq.get(term, 0) + 1
 
-    # Step 3: Compute TF-IDF vector for each document
+    # Build the TF-IDF vector for each bug
     tfidf_index = []
     for tokens in doc_tokens:
-        tf = Counter(tokens)                   # raw term frequency
+        tf = Counter(tokens)
         vec = {}
         for term, count in tf.items():
-            tf_score  = count / len(tokens)    # normalize by doc length
-            idf_score = math.log((N + 1) / (doc_freq.get(term, 0) + 1))  # +1 smoothing
+            tf_score  = count / len(tokens)
+            idf_score = math.log((N + 1) / (doc_freq.get(term, 0) + 1))  # +1 avoids division by zero
             vec[term] = tf_score * idf_score
         tfidf_index.append(vec)
 
@@ -185,12 +180,10 @@ def build_tfidf_index(df: pd.DataFrame) -> list[dict]:
 
 def cosine_similarity(vec_a: dict, vec_b: dict) -> float:
     """
-    Cosine similarity between two TF-IDF vectors.
+    Measures the angle between two vectors. Score of 1 = identical,
+    0 = no shared terms. We use this to rank bugs by relevance to a query.
 
-    cos(θ) = (A · B) / (|A| * |B|)
-
-    Range: 0 (no overlap) to 1 (identical).
-    We only compute over the union of keys for efficiency.
+    Formula: (A · B) / (|A| * |B|)
     """
     all_terms = set(vec_a) | set(vec_b)
     dot_product = sum(vec_a.get(t, 0) * vec_b.get(t, 0) for t in all_terms)
@@ -203,9 +196,9 @@ def cosine_similarity(vec_a: dict, vec_b: dict) -> float:
 
 def vectorize_query(query: str) -> dict:
     """
-    Convert a query string into a TF vector (no IDF — query is one doc).
-    We skip IDF here; the cosine similarity with the corpus vectors
-    still works well because the corpus vectors encode IDF weighting.
+    Turn the user's query into a TF vector (no IDF needed — it's one doc).
+    Cosine similarity against the corpus vectors still works because the
+    corpus side already encodes IDF weighting.
     """
     tokens = tokenize(query)
     if not tokens:
@@ -215,10 +208,12 @@ def vectorize_query(query: str) -> dict:
 
 
 # ─────────────────────────────────────────────
-# 5. RETRIEVAL FUNCTION
+# 5. RETRIEVAL — the "R" in RAG
 #
-#    Given a query, return the top-k most similar bugs.
-#    This is the core of the RAG "R" (Retrieve) step.
+#    Given a query, score every bug by cosine similarity
+#    and return the top-k. This is brute-force k-NN.
+#    At 100 bugs it's instant. At 1M bugs you'd use FAISS
+#    or a vector DB — but the algorithm is identical.
 # ─────────────────────────────────────────────
 
 def retrieve(
@@ -227,51 +222,38 @@ def retrieve(
     tfidf_index: list[dict],
     top_k: int = 6
 ) -> list[dict]:
-    """
-    Retrieve the top_k bugs most similar to the query.
-
-    Returns a list of dicts with bug data + similarity score,
-    sorted by score descending.
-    """
+    """Return the top_k bugs most similar to the query, ranked by score."""
     query_vec = vectorize_query(query)
     if not query_vec:
         return []
 
-    scored = []
-    for i, bug_vec in enumerate(tfidf_index):
-        score = cosine_similarity(query_vec, bug_vec)
-        scored.append({
-            "bug": df.iloc[i].to_dict(),
-            "score": score,
-        })
-
-    # Sort by similarity, descending
+    scored = [
+        {"bug": df.iloc[i].to_dict(), "score": cosine_similarity(query_vec, bug_vec)}
+        for i, bug_vec in enumerate(tfidf_index)
+    ]
     scored.sort(key=lambda x: x["score"], reverse=True)
     return scored[:top_k]
 
 
 # ─────────────────────────────────────────────
-# 6. PROMPT AUGMENTATION
+# 6. PROMPT AUGMENTATION — the "A" in RAG
 #
-#    This is the "A" in RAG — Augment the LLM prompt
-#    with the retrieved context so the model answers
-#    from real data, not hallucinated knowledge.
+#    We serialize the retrieved bugs into plain text and inject
+#    them into the system prompt. Claude has no knowledge of
+#    your bug data baked in — this is how it gets it at query time.
 #
-#    Each mode has a different system prompt that shapes
-#    how the model reasons over the retrieved bugs.
+#    Each mode uses a different system prompt to shape how Claude
+#    reasons over the same retrieved context. Mode only directly
+#    affects augmentation; generation changes as a downstream result.
 # ─────────────────────────────────────────────
 
 def build_context_block(results: list[dict]) -> str:
-    """
-    Serialize retrieved bugs into a readable context string
-    that gets injected into the system prompt.
-    """
+    """Serialize retrieved bugs into a readable block for prompt injection."""
     lines = []
     for r in results:
         bug = r["bug"]
-        score_pct = r["score"] * 100
         lines.append(
-            f"[BUG-{bug['id']} | {bug['component']} | {bug['severity']} | sim={score_pct:.1f}%]\n"
+            f"[BUG-{bug['id']} | {bug['component']} | {bug['severity']} | sim={r['score']*100:.1f}%]\n"
             f"Title: {bug['title']}\n"
             f"Description: {bug['description']}\n"
             f"Customer Impact: {bug['customer_impact']}\n"
@@ -281,28 +263,28 @@ def build_context_block(results: list[dict]) -> str:
 
 
 MODE_PROMPTS = {
-    "Q&A": lambda ctx, q: f"""You are a senior engineering analyst. Answer the user's question about bug reports using ONLY the retrieved context below. Be specific, cite bug IDs (e.g. BUG-1), and be concise (3-5 sentences max). Do not invent bugs not in the context.
+    "Q&A": lambda ctx, q: f"""You are a senior engineering analyst. Answer the user's question using ONLY the retrieved bugs below. Be specific, cite bug IDs (e.g. BUG-1), and keep it to 3-5 sentences. Do not invent bugs not in the context.
 
 RETRIEVED BUGS:
 {ctx}
 
 User question: {q}""",
 
-    "Similarity": lambda ctx, q: f"""You are a bug triage specialist detecting duplicate and related issues. Based on the retrieved bugs below, identify clusters of semantically similar issues, explain what makes them related, and flag likely duplicates. Reference bug IDs explicitly.
+    "Similarity": lambda ctx, q: f"""You are a bug triage specialist. Based on the retrieved bugs below, identify clusters of related issues, explain what makes them similar, and flag likely duplicates. Reference bug IDs explicitly.
 
 RETRIEVED BUGS:
 {ctx}
 
 Similarity query: {q}""",
 
-    "Exec Summary": lambda ctx, q: f"""You are a Senior TPM preparing a VP-level executive briefing. Based on the retrieved bugs, write a concise executive summary with: (1) top risk areas, (2) customer impact, (3) three prioritized action items. Be direct and crisp — no filler language.
+    "Exec Summary": lambda ctx, q: f"""You are a Senior TPM preparing a VP-level briefing. Write a concise executive summary covering: (1) top risk areas, (2) customer impact, (3) three prioritized actions. Direct and crisp — no filler.
 
 RETRIEVED BUGS:
 {ctx}
 
 Briefing focus: {q}""",
 
-    "Fix Recs": lambda ctx, q: f"""You are a principal engineer doing a technical review. For each relevant bug in the retrieved context, provide: root cause hypothesis, recommended fix approach, and effort estimate (S/M/L). Reference bug IDs. Be opinionated and specific — not generic advice.
+    "Fix Recs": lambda ctx, q: f"""You are a principal engineer doing a technical review. For each relevant bug, provide: root cause hypothesis, recommended fix, and effort estimate (S/M/L). Reference bug IDs. Be specific, not generic.
 
 RETRIEVED BUGS:
 {ctx}
@@ -335,41 +317,37 @@ MODE_SUGGESTED = {
 
 
 # ─────────────────────────────────────────────
-# 7. CLAUDE API CALL
+# 7. CLAUDE API — streaming
 #
-#    After retrieval + augmentation, we call Claude.
-#    The full augmented prompt goes in as the system message.
-#    We use streaming so the response appears token-by-token.
+#    We use streaming so the response appears token-by-token
+#    instead of waiting for the full reply. The function is a
+#    Python generator: yield hands one chunk back to the caller,
+#    then resumes when the caller asks for the next one.
+#
+#    Why streaming matters for UX: a 500-token response at ~50
+#    tokens/sec takes 10 seconds. Streaming makes it feel instant.
 # ─────────────────────────────────────────────
 
 def call_claude_streaming(system_prompt: str, user_query: str, api_key: str):
-    """
-    Call Claude with a system prompt (contains retrieved context)
-    and the user query. Streams the response back.
-
-    Yields text chunks as they arrive.
-    """
+    """Call Claude with the augmented system prompt. Yields text chunks."""
     client = anthropic.Anthropic(api_key=api_key)
-
     with client.messages.stream(
         model="claude-sonnet-4-5",
         max_tokens=1000,
         system=system_prompt,
         messages=[{"role": "user", "content": user_query}],
     ) as stream:
-        for text_chunk in stream.text_stream:
-            yield text_chunk
+        for chunk in stream.text_stream:
+            yield chunk
 
 
 # ─────────────────────────────────────────────
-# 8. HELPER: SCORE COLOR
+# 8. HELPERS
 # ─────────────────────────────────────────────
 
 def score_color(score: float) -> str:
-    if score > 0.15:
-        return "score-high"
-    elif score > 0.07:
-        return "score-med"
+    if score > 0.15: return "score-high"
+    if score > 0.07: return "score-med"
     return "score-low"
 
 def severity_color(sev: str) -> str:
@@ -377,19 +355,16 @@ def severity_color(sev: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# 9. SESSION STATE INITIALIZATION
-#    Streamlit reruns top-to-bottom on every interaction.
-#    st.session_state persists values across reruns.
+# 9. SESSION STATE
+#
+#    Streamlit reruns app.py from line 1 on every interaction.
+#    st.session_state is the only thing that survives reruns.
+#    Think of it as the app's memory.
 # ─────────────────────────────────────────────
 
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []         # list of {role, content, retrieved}
-
-if "last_retrieved" not in st.session_state:
-    st.session_state.last_retrieved = []
-
-if "pipeline_step" not in st.session_state:
-    st.session_state.pipeline_step = None
+if "chat_history"    not in st.session_state: st.session_state.chat_history    = []
+if "last_retrieved"  not in st.session_state: st.session_state.last_retrieved  = []
+if "pipeline_step"   not in st.session_state: st.session_state.pipeline_step   = None
 
 
 # ─────────────────────────────────────────────
@@ -424,16 +399,16 @@ with st.sidebar:
     top_k = st.slider(
         "Bugs to retrieve (k)",
         min_value=2, max_value=10, value=6,
-        help="How many bugs to pull from the index per query. More = richer context, higher token cost.",
+        help="More bugs = richer context but higher token cost.",
     )
 
     st.divider()
     st.markdown("**Pipeline**")
 
     pipeline_steps = ["encode query", "cosine retrieval", "rank & filter", "augment prompt", "llm generate"]
-    current_step = st.session_state.pipeline_step
+    current_step   = st.session_state.pipeline_step
 
-    for i, step in enumerate(pipeline_steps):
+    for step in pipeline_steps:
         if current_step is None:
             css = "step"
         elif step == current_step:
@@ -446,22 +421,21 @@ with st.sidebar:
 
     st.divider()
 
-    # Corpus stats
     try:
         df_stats = load_bugs()
         st.markdown("**Corpus stats**")
-        col1, col2 = st.columns(2)
-        col1.metric("Bugs", len(df_stats))
-        col2.metric("Components", df_stats["component"].nunique())
-        col1.metric("High sev", int((df_stats["severity"] == "High").sum()))
-        col2.metric("Open", int((df_stats["status"] == "Open").sum()))
+        c1, c2 = st.columns(2)
+        c1.metric("Bugs",       len(df_stats))
+        c2.metric("Components", df_stats["component"].nunique())
+        c1.metric("High sev",   int((df_stats["severity"] == "High").sum()))
+        c2.metric("Open",       int((df_stats["status"]   == "Open").sum()))
     except FileNotFoundError:
         st.warning("bugs_extended.csv not found")
 
     if st.button("Clear chat"):
-        st.session_state.chat_history = []
+        st.session_state.chat_history   = []
         st.session_state.last_retrieved = []
-        st.session_state.pipeline_step = None
+        st.session_state.pipeline_step  = None
         st.rerun()
 
 
@@ -471,11 +445,9 @@ with st.sidebar:
 
 col_chat, col_context = st.columns([2, 1], gap="medium")
 
-# ── Left: Chat panel ──────────────────────────
 with col_chat:
     st.markdown("### Chat")
 
-    # Suggested queries for current mode
     st.markdown("**Try a query:**")
     sq_cols = st.columns(len(MODE_SUGGESTED[mode]))
     suggested_query = None
@@ -485,7 +457,6 @@ with col_chat:
 
     st.divider()
 
-    # Render chat history
     for turn in st.session_state.chat_history:
         if turn["role"] == "user":
             st.markdown(
@@ -498,7 +469,6 @@ with col_chat:
                 unsafe_allow_html=True,
             )
 
-    # Query input
     with st.form("query_form", clear_on_submit=True):
         user_input = st.text_area(
             "Your query",
@@ -508,13 +478,7 @@ with col_chat:
         )
         submitted = st.form_submit_button("Run RAG ↗", use_container_width=True)
 
-    # Use suggested query if a button was clicked
-    if suggested_query:
-        user_input = suggested_query
-        submitted = True
 
-
-# ── Right: Retrieved context panel ───────────
 with col_context:
     st.markdown("### Retrieval Context")
     st.caption("Bugs retrieved for the last query, ranked by cosine similarity")
@@ -523,12 +487,10 @@ with col_context:
         st.info("Retrieved bugs will appear here after each query.")
     else:
         for r in st.session_state.last_retrieved:
-            bug = r["bug"]
-            score = r["score"]
-            score_pct = f"{score * 100:.1f}%"
+            bug       = r["bug"]
+            score_pct = f"{r['score'] * 100:.1f}%"
             sev_color = severity_color(bug["severity"])
-            score_css = score_color(score)
-
+            score_css = score_color(r["score"])
             st.markdown(f"""
 <div class="bug-card">
   <div class="bug-id">BUG-{bug['id']} &nbsp;
@@ -546,18 +508,21 @@ with col_context:
 # ─────────────────────────────────────────────
 # 12. RAG PIPELINE EXECUTION
 #
-#     Streamlit reruns the entire script on every interaction.
-#     The key insight: do everything in ONE block, no st.rerun()
-#     mid-pipeline. st.rerun() caused the original bugs:
-#       - double submission (form + suggested button both fired)
-#       - pipeline never completing (pending_query set after rerun)
+#    Important Streamlit behavior: every button click, form submit,
+#    or slider move causes app.py to rerun from line 1. All local
+#    variables are gone; only st.session_state survives.
 #
-#     Instead: run all 5 steps synchronously, update session_state
-#     at the end, then let Streamlit's natural rerun refresh the UI.
+#    The original version called st.rerun() mid-pipeline to update
+#    the UI, which caused two bugs:
+#      1. double submission — the form and suggested button both fired
+#      2. pipeline never completed — pending_query was set after rerun
+#         so it was never in memory when the continuation block ran
+#
+#    Fix: run all 5 steps in one synchronous block. One st.rerun()
+#    at the very end to clean up the streaming cursor. Simple and reliable.
 # ─────────────────────────────────────────────
 
-# Resolve the final query: suggested button takes priority over form,
-# but only one should ever trigger per rerun.
+# Suggested button takes priority; only one trigger fires per rerun
 final_query = suggested_query if suggested_query else (user_input if submitted else None)
 
 if final_query and final_query.strip():
@@ -573,29 +538,26 @@ if final_query and final_query.strip():
         st.stop()
 
     query = final_query.strip()
-
-    # Add user message to history immediately so it renders on next rerun
     st.session_state.chat_history.append({"role": "user", "content": query})
 
     try:
-        # ── Step 1: Encode query ───────────────────
+        # Step 1: Encode — tokenize and vectorize the query
         st.session_state.pipeline_step = "encode query"
         tfidf_idx = build_tfidf_index(df)
 
-        # ── Step 2 & 3: Retrieve + rank ────────────
+        # Steps 2 & 3: Retrieve and rank
         st.session_state.pipeline_step = "cosine retrieval"
         results = retrieve(query, df, tfidf_idx, top_k=top_k)
         st.session_state.pipeline_step = "rank & filter"
         st.session_state.last_retrieved = results
 
-        # Update retrieval panel immediately so user sees it while waiting
+        # Show retrieved bugs immediately so user sees them while Claude generates
         with col_context:
             for r in results:
-                bug = r["bug"]
-                score = r["score"]
-                score_pct = f"{score * 100:.1f}%"
+                bug       = r["bug"]
+                score_pct = f"{r['score'] * 100:.1f}%"
                 sev_color = severity_color(bug["severity"])
-                score_css = score_color(score)
+                score_css = score_color(r["score"])
                 st.markdown(f"""
 <div class="bug-card">
   <div class="bug-id">BUG-{bug['id']} &nbsp;
@@ -609,31 +571,31 @@ if final_query and final_query.strip():
 </div>
 """, unsafe_allow_html=True)
 
-        # ── Step 4: Augment prompt ─────────────────
+        # Step 4: Augment — inject retrieved bugs into the mode-specific system prompt
         st.session_state.pipeline_step = "augment prompt"
         context_block = build_context_block(results)
         system_prompt = MODE_PROMPTS[mode](context_block, query)
 
-        # ── Step 5: Stream generation ──────────────
+        # Step 5: Generate — stream Claude's response token by token
         st.session_state.pipeline_step = "llm generate"
         response_text = ""
 
         with col_chat:
-            response_placeholder = st.empty()
+            placeholder = st.empty()
             for chunk in call_claude_streaming(system_prompt, query, api_key):
                 response_text += chunk
-                response_placeholder.markdown(
+                placeholder.markdown(
                     f'<div class="assistant-msg"><div class="msg-label">rag//claude</div>{response_text}▌</div>',
                     unsafe_allow_html=True,
                 )
 
-        # Store completed response and rerun once to clean up the cursor
+        # Save response, then rerun once to drop the streaming cursor
         st.session_state.chat_history.append({"role": "assistant", "content": response_text})
         st.rerun()
 
     except anthropic.AuthenticationError:
         st.error("Invalid API key. Check your Anthropic API key in the sidebar.")
-        st.session_state.chat_history.pop()   # remove the user message we just added
+        st.session_state.chat_history.pop()
     except Exception as e:
         st.error(f"Error: {e}")
         st.session_state.chat_history.pop()
