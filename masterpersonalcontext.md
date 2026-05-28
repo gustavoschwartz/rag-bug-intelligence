@@ -1,3 +1,4 @@
+<aside>
 # Master Personal Context Profile — Gustavo Varejao
 
 ## Role & Identity
@@ -68,3 +69,4 @@
   streaming vs batch, LLM vs deterministic retrieval
 - Has not yet used AI coding tools professionally; building fluency through personal projects
 - Goal: make AI architecture trade-off discussions second nature before interviews
+</aside>
